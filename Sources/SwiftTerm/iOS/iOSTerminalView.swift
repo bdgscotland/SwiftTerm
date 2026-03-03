@@ -194,9 +194,6 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     var attributes: [Attribute: NSDictionary] = [:]
     var urlAttributes: [Attribute: NSDictionary] = [:]
 
-    // Per-row rendering cache. Keyed by display row index.
-    var lineCache: [Int: (line: BufferLine, selectionRange: Range<Int>?, lineInfo: ViewLineInfo)] = [:]
-
     // Timer to display the terminal buffer
     var link: CADisplayLink!
     // Cache for the colors in the 0..255 range

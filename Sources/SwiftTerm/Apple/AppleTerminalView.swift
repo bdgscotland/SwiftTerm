@@ -85,7 +85,6 @@ extension TerminalView {
     {
         self.attributes = [:]
         self.urlAttributes = [:]
-        self.lineCache = [:]
         self.colors = Array(repeating: nil, count: 256)
         self.trueColors = [:]
     }
@@ -263,7 +262,6 @@ extension TerminalView {
     {
         urlAttributes = [:]
         attributes = [:]
-        lineCache = [:]
 
         terminal.updateFullScreen ()
         queuePendingDisplay()
@@ -1126,15 +1124,7 @@ extension TerminalView {
             #endif
             let line = displayBuffer.lines [row]
             let selectionColumns = selectedColumnsRange(row: row, cols: displayBuffer.cols)
-            let lineInfo: ViewLineInfo
-            if let cached = lineCache[row],
-               cached.line === line,
-               cached.selectionRange == selectionColumns {
-                lineInfo = cached.lineInfo
-            } else {
-                lineInfo = buildAttributedString(row: row, line: line, cols: displayBuffer.cols)
-                lineCache[row] = (line: line, selectionRange: selectionColumns, lineInfo: lineInfo)
-            }
+            let lineInfo = buildAttributedString(row: row, line: line, cols: displayBuffer.cols)
             let rowBase = lineOrigin.y + cellDimension.height
             var underTextImages: [AppleImage] = []
             var overTextKittyImages: [AppleImage] = []

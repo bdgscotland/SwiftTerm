@@ -215,10 +215,10 @@ public class LocalProcess {
                 }
             }
         })
-        dispatchQueue.sync {
-            delegate?.dataReceived(slice: b[...])
+        dispatchQueue.async { [b] in
+            self.delegate?.dataReceived(slice: b[...])
+            self.io?.read(offset: 0, length: self.readSize, queue: self.readQueue, ioHandler: self.childProcessRead)
         }
-        io?.read(offset: 0, length: readSize, queue: readQueue, ioHandler: childProcessRead)
     }
 
 #if os(macOS)

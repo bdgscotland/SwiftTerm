@@ -111,10 +111,6 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     var attributes: [Attribute: NSDictionary] = [:]
     var urlAttributes: [Attribute: NSDictionary] = [:]
 
-    // Per-row rendering cache. Keyed by display row index.
-    // Invalidated on color/font/resize changes; per-row validity checked via BufferLine identity.
-    var lineCache: [Int: (line: BufferLine, selectionRange: Range<Int>?, lineInfo: ViewLineInfo)] = [:]
-
     // Cache for the colors in the 0..255 range
     var colors: [NSColor?] = Array(repeating: nil, count: 256)
     var trueColors: [Attribute.Color:NSColor] = [:]
