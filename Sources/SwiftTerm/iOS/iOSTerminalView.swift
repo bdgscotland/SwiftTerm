@@ -190,8 +190,12 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
 
     // Attribute dictionary, maps a console attribute (color, flags) to the corresponding dictionary
     // of attributes for an NSAttributedString
-    var attributes: [Attribute: [NSAttributedString.Key:Any]] = [:]
-    var urlAttributes: [Attribute: [NSAttributedString.Key:Any]] = [:]
+    // Stored as NSDictionary to avoid per-frame Swift-to-ObjC bridging overhead.
+    var attributes: [Attribute: NSDictionary] = [:]
+    var urlAttributes: [Attribute: NSDictionary] = [:]
+
+    // Per-row rendering cache. Keyed by display row index.
+    var lineCache: [Int: (line: BufferLine, selectionRange: Range<Int>?, lineInfo: ViewLineInfo)] = [:]
 
     // Timer to display the terminal buffer
     var link: CADisplayLink!

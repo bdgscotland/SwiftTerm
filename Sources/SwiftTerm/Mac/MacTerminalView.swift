@@ -106,11 +106,15 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     private var scroller: NSScroller!
     
     // Attribute dictionary, maps a console attribute (color, flags) to the corresponding dictionary
-    // of attributes for an NSAttributedString
-    var attributes: [Attribute: [NSAttributedString.Key:Any]] = [:]
-    var urlAttributes: [Attribute: [NSAttributedString.Key:Any]] = [:]
-    
-    
+    // of attributes for an NSAttributedString.
+    // Stored as NSDictionary to avoid per-frame Swift-to-ObjC bridging overhead.
+    var attributes: [Attribute: NSDictionary] = [:]
+    var urlAttributes: [Attribute: NSDictionary] = [:]
+
+    // Per-row rendering cache. Keyed by display row index.
+    // Invalidated on color/font/resize changes; per-row validity checked via BufferLine identity.
+    var lineCache: [Int: (line: BufferLine, selectionRange: Range<Int>?, lineInfo: ViewLineInfo)] = [:]
+
     // Cache for the colors in the 0..255 range
     var colors: [NSColor?] = Array(repeating: nil, count: 256)
     var trueColors: [Attribute.Color:NSColor] = [:]

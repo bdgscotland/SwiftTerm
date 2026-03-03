@@ -85,6 +85,7 @@ extension TerminalView {
     {
         self.attributes = [:]
         self.urlAttributes = [:]
+        self.lineCache = [:]
         self.colors = Array(repeating: nil, count: 256)
         self.trueColors = [:]
     }
@@ -262,7 +263,8 @@ extension TerminalView {
     {
         urlAttributes = [:]
         attributes = [:]
-        
+        lineCache = [:]
+
         terminal.updateFullScreen ()
         queuePendingDisplay()
     }
@@ -375,9 +377,10 @@ extension TerminalView {
     }
     
     //
-    // Given a vt100 attribute, return the NSAttributedString attributes used to render it
+    // Given a vt100 attribute, return the NSAttributedString attributes used to render it.
+    // Returns NSDictionary to avoid per-frame Swift-to-ObjC bridging overhead.
     //
-    func getAttributes (_ attribute: Attribute, withUrl: Bool) -> [NSAttributedString.Key:Any]?
+    func getAttributes (_ attribute: Attribute, withUrl: Bool) -> NSDictionary?
     {
         if let result = withUrl ? urlAttributes [attribute] : attributes [attribute] {
             return result
@@ -397,7 +400,7 @@ extension TerminalView {
                 bg = .defaultInvertedColor
             }
         }
-        
+
         var useBoldForBrightColor: Bool = false
         // if high - bright colors are disabled in settings we will use bold font instead
         if case .ansi256(let code) = fg, code > 7, !useBrightColors {
@@ -405,7 +408,7 @@ extension TerminalView {
         }
         var tf: TTFont
         let isBold = flags.contains(.bold)
-        
+
         if isBold || useBoldForBrightColor {
             if flags.contains (.italic) {
                 tf = fontSet.boldItalic
@@ -417,7 +420,7 @@ extension TerminalView {
         } else {
             tf = fontSet.normal
         }
-        
+
         var fgColor = mapColor (color: fg, isFg: true, isBold: isBold, useBrightColors: useBrightColors)
         // Apply dim/faint attribute (SGR 2) - reduce color intensity
         if flags.contains(.dim) {
@@ -440,17 +443,20 @@ extension TerminalView {
             nsattr [.strikethroughStyle] = NSUnderlineStyle.single.rawValue
         }
 
+        // Bridge to NSDictionary once at cache-insertion time.
+        // All subsequent uses skip Swift-to-ObjC bridging entirely.
         if withUrl {
             nsattr [.underlineStyle] = NSUnderlineStyle.single.rawValue
             nsattr [.underlineColor] = fgColor
-            
-            // Add to cache
-            urlAttributes [attribute] = nsattr
+
+            let bridged = nsattr as NSDictionary
+            urlAttributes [attribute] = bridged
+            return bridged
         } else {
-            // Just add to cache
-            attributes [attribute] = nsattr
+            let bridged = nsattr as NSDictionary
+            attributes [attribute] = bridged
+            return bridged
         }
-        return nsattr
     }
 
     private func kittyImageFromRgba(bytes: [UInt8], width: Int, height: Int) -> TTImage? {
@@ -527,8 +533,10 @@ extension TerminalView {
             characterCount == 0
         }
         
-        mutating func append(text: String, attributes: [NSAttributedString.Key: Any]) {
-            attributedString.append(NSAttributedString(string: text, attributes: attributes))
+        mutating func append(text: String, attributes: NSDictionary) {
+            // Cast from pre-bridged NSDictionary — no Swift-to-ObjC bridging occurs
+            // because the underlying ObjC dictionary is reused directly.
+            attributedString.append(NSAttributedString(string: text, attributes: attributes as? [NSAttributedString.Key: Any]))
             characterCount += 1
         }
         
@@ -557,7 +565,7 @@ extension TerminalView {
         
         // Batching state: accumulate consecutive characters with the same attributes
         var pendingText = ""
-        var pendingAttrs: [NSAttributedString.Key: Any]? = nil
+        var pendingAttrs: NSDictionary? = nil
         var lastAttr: Attribute? = nil
         var lastHasUrl = false
         var lastIsSelected = false
@@ -604,10 +612,10 @@ extension TerminalView {
                 lastIsSelected = isSelected
             }
 
-            let currentAttributes: [NSAttributedString.Key: Any]
+            let currentAttributes: NSDictionary
             if isSelected {
-                var mutable = attributes
-                mutable[.selectionBackgroundColor] = selectedTextBackgroundColor
+                let mutable = attributes.mutableCopy() as! NSMutableDictionary
+                mutable[NSAttributedString.Key.selectionBackgroundColor] = selectedTextBackgroundColor
                 currentAttributes = mutable
             } else {
                 currentAttributes = attributes
@@ -622,7 +630,7 @@ extension TerminalView {
                ch.code >= BoxDrawingRenderer.lowerBoundary,
                ch.code <= BoxDrawingRenderer.upperBoundary {
                 flushPending()
-                let fgColor = (currentAttributes[.foregroundColor] as? TTColor) ?? nativeForegroundColor
+                let fgColor = (currentAttributes[NSAttributedString.Key.foregroundColor] as? TTColor) ?? nativeForegroundColor
                 boxDrawings.append(BoxDrawingRenderItem(column: col,
                                                         columnWidth: width,
                                                         codePoint: UInt32(ch.code),
@@ -636,7 +644,7 @@ extension TerminalView {
                       (ch.code >= BlockElementMapping.lowerBoundary && ch.code <= BlockElementMapping.upperBoundary),
                       let rects = BlockElementMapping.rects(for: UInt32(ch.code)) {
                 flushPending()
-                let fgColor = (currentAttributes[.foregroundColor] as? TTColor) ?? nativeForegroundColor
+                let fgColor = (currentAttributes[NSAttributedString.Key.foregroundColor] as? TTColor) ?? nativeForegroundColor
                 blockElements.append(BlockElementRenderItem(column: col, columnWidth: width, rects: rects, foregroundColor: fgColor))
                 builder?.append(text: " ", attributes: currentAttributes)
                 previousPlaceholder = nil
@@ -1117,7 +1125,16 @@ extension TerminalView {
             } 
             #endif
             let line = displayBuffer.lines [row]
-            let lineInfo = buildAttributedString(row: row, line: line, cols: displayBuffer.cols)
+            let selectionColumns = selectedColumnsRange(row: row, cols: displayBuffer.cols)
+            let lineInfo: ViewLineInfo
+            if let cached = lineCache[row],
+               cached.line === line,
+               cached.selectionRange == selectionColumns {
+                lineInfo = cached.lineInfo
+            } else {
+                lineInfo = buildAttributedString(row: row, line: line, cols: displayBuffer.cols)
+                lineCache[row] = (line: line, selectionRange: selectionColumns, lineInfo: lineInfo)
+            }
             let rowBase = lineOrigin.y + cellDimension.height
             var underTextImages: [AppleImage] = []
             var overTextKittyImages: [AppleImage] = []
