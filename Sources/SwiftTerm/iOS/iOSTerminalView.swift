@@ -177,6 +177,11 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
     var search: SearchService!
     var debug: UIView?
     var pendingDisplay: Bool = false
+
+    /// Display update interval in nanoseconds. Default: ~33.3ms (30fps).
+    /// Set to a higher value (e.g., 200_000_000 for 5fps) to throttle
+    /// unfocused terminals and reduce aggregate rendering cost.
+    public var renderThrottleInterval: UInt64 = 16_670_000 * 2
     var cellDimension: CellDimension
     var caretView: CaretView?
     var terminal: Terminal!

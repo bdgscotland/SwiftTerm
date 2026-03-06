@@ -1549,14 +1549,21 @@ extension TerminalView {
     // It is also cheap, so should be called when new data has been posted or received.
     func queuePendingDisplay ()
     {
-        // throttle
+        // throttle — interval is configurable via renderThrottleInterval
         if !pendingDisplay {
-            let fps30 = 16670000 * 2
             pendingDisplay = true
             DispatchQueue.main.asyncAfter(
-                deadline: DispatchTime (uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + UInt64 (fps30)),
+                deadline: DispatchTime (uptimeNanoseconds: DispatchTime.now().uptimeNanoseconds + renderThrottleInterval),
                 execute: updateDisplay)
         }
+    }
+
+    /// Force an immediate display update, bypassing the throttle timer.
+    /// Call when the terminal gains focus to avoid up to one throttle-interval
+    /// of latency from a previously scheduled unfocused timer.
+    public func forceDisplay() {
+        pendingDisplay = false
+        updateDisplay()
     }
     
     ///
