@@ -531,6 +531,9 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     override public func draw (_ dirtyRect: NSRect) {
+        // Skip draw for terminals that are fully occluded or have a hidden ancestor
+        // (e.g., ControlView hidden via AppKitHider when in Focus/Intent mode).
+        guard !isHiddenOrHasHiddenAncestor, !visibleRect.isEmpty else { return }
         guard let currentContext = getCurrentGraphicsContext() else {
             return
         }
