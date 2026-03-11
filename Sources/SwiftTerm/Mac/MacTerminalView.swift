@@ -1788,17 +1788,40 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
     }
     
     private var autoScrollDelta = 0
-    // Callback from when the mouseDown autoscrolling timer goes off
-    private func scrollingTimerElapsed (source: Timer)
-    {
-        if autoScrollDelta == 0 {
+    private var autoScrollTimer: Timer?
+
+    private func startAutoScrollTimer() {
+        guard autoScrollTimer == nil else { return }
+        autoScrollTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.autoScrollTimerFired()
+        }
+    }
+
+    private func stopAutoScrollTimer() {
+        autoScrollTimer?.invalidate()
+        autoScrollTimer = nil
+    }
+
+    /// Called at 20Hz while the mouse is dragged outside the view bounds.
+    /// Scrolls the terminal and extends the selection to the edge row.
+    private func autoScrollTimerFired() {
+        guard autoScrollDelta != 0 else {
+            stopAutoScrollTimer()
             return
         }
+        let displayBuffer = terminal.displayBuffer
         if autoScrollDelta < 0 {
-            scrollUp(lines: autoScrollDelta * -1)
+            scrollUp(lines: -autoScrollDelta)
+            // Extend selection to the top-left of the visible area
+            let topRow = displayBuffer.yDisp
+            selection.dragExtend(bufferPosition: Position(col: 0, row: topRow))
         } else {
-            scrollUp(lines: autoScrollDelta)
+            scrollDown(lines: autoScrollDelta)
+            // Extend selection to the bottom-right of the visible area
+            let bottomRow = displayBuffer.yDisp + displayBuffer.rows - 1
+            selection.dragExtend(bufferPosition: Position(col: displayBuffer.cols - 1, row: bottomRow))
         }
+        setNeedsDisplay(bounds)
     }
     
     public override func mouseDown(with event: NSEvent) {
@@ -1858,6 +1881,8 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
         #endif
         
         didSelectionDrag = false
+        autoScrollDelta = 0
+        stopAutoScrollTimer()
     }
     
     public override func mouseDragged(with event: NSEvent) {
@@ -1892,6 +1917,11 @@ open class TerminalView: NSView, NSTextInputClient, NSUserInterfaceValidations, 
             } else if screenRow >= displayBuffer.rows {
                 autoScrollDelta = calcScrollingVelocity(delta: screenRow - displayBuffer.rows)
             }
+        }
+        if autoScrollDelta != 0 {
+            startAutoScrollTimer()
+        } else {
+            stopAutoScrollTimer()
         }
         setNeedsDisplay(bounds)
     }
